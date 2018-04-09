@@ -19,6 +19,7 @@ use app\bugui\validate\LoginValidate;
 use think\Cache;
 use think\Collection;
 use think\Db;
+use think\Request;
 use think\Validate;
 
 class Index extends Collection
@@ -29,13 +30,7 @@ class Index extends Collection
      *  $data
      */
 
-    public function index(){
-        //跨域
-        header('content-type:application:json;charset=utf8');
-        header('Access-Control-Allow-Origin:*');
-        header('Access-Control-Allow-Methods:POST');
-        header('Access-Control-Allow-Headers:x-requested-with,content-type');
-
+    public function login(){
         $post = input('post.');
         if (!$post){
             exit(json_encode([
@@ -43,340 +38,1012 @@ class Index extends Collection
                 'msg' => '未传入任何参数！'
             ]));
         }
-        if (!array_key_exists('token',$post)){
-            exit(json_encode([
-                'code' => 403,
-                'msg' => '第一项参数缺失，禁止请求！'
-            ]));
-        }
-        $token = $post['token'];
-        if (!array_key_exists('type',$post)){
+        if (!array_key_exists('data',$post)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '第二项参数缺失，禁止请求！'
             ]));
         }
-        $type = $post['type'];
+        $data = $post['data'];
+        $TokenModel = new Token();
+        //获得token
+        $tk = $TokenModel->get_token($data['code']);
+        return json_encode([
+            'code' => 200,
+            'msg' => $tk
+        ]);
+    }
+
+    public function first_time(){
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
         if (!array_key_exists('data',$post)){
             exit(json_encode([
                 'code' => 403,
-                'msg' => '第三项参数缺失，禁止请求！'
+                'msg' => '第二项参数缺失，禁止请求！'
             ]));
         }
-        $data = $post['data'];
-
-        //实例化
-        $user = new User();
-        $user_token = new UserToken();
-        $admin_token = new AdminToken();
         $TokenModel = new Token();
-        $Super = new Super();
-
-        //判断类型
-        if ($type=='A001'){
-            //登录
-            //验证是否有传参
-            $user->login_exist_validate($token,$data);
-            //验证传参的格式是否正确(白名单)
-            (new LoginValidate())->goToCheck($data);
-            //校验
-            $username = $data['username'];
-            $is = $user->where([
-                'number' => $username
-            ])->field('id')->find();
-            if (!$is){
-                throw new UserException([
-                    'msg' => '用户不存在！'
-                ]);
-            }
-            $password = $data['password'];
-            $is_exist = $user->where([
-                'number' => $username,
-                'password' => md5(config('setting.user_salt').$password)
-            ])->field('id')->find();
-            if (!$is_exist){
-                throw new UserException([
-                    'code' => 405,
-                    'msg' => '密码错误！'
-                ]);
-            }
-            //查id
-            $id = $is_exist['id'];
-            //获得token
-            $tk = $TokenModel->get_token($data['code'],$id);
+        $data = $post['data'];
+        $name = $data['name'];
+        $number = $data['number'];
+        $grade = $data['grade'];
+        $phone = $data['phone'];
+        $user = new User();
+        $uid = $TokenModel->get_id();
+        $check = Db::table('user')->where([
+            'id' => $uid
+        ])->field('name,number,grade,phone')->find();
+        if ($check['name']==$name&&$check['number']==$number&&$check['grade']==$grade&&$check['phone']==$phone){
             return json_encode([
                 'code' => 200,
-                'msg' => $tk
+                'msg' => '成功'
             ]);
-        }elseif ($type == 'A002'){
-            //修改密码
-            //通过token获取id并且判断token是否有效
-            $uid = $TokenModel->get_id();
-            //检查这个用户是否存在和验证传参的格式是否正确(白名单)
-            $user->change_psw_validate($data);
-            $is_exist = $user->where([
-                'id' => $uid
-            ])->field('password')->find();
-            if (!$is_exist){
-                throw new UserException([
-                    'msg' => '用户不存在！'
-                ]);
-            }
-            if (md5(config('setting.user_salt').$data['old_password']) != $is_exist['password']){
-                throw new BaseException([
-                    'msg' => '旧密码错误'
-                ]);
-            }
-            //判断两次是否一致
-            $psw = $data['password'];
-            $psw_check = $data['password_check'];
-            if ($psw != $psw_check){
-                throw new BaseException([
-                    'msg' => '输入的两次密码不一致！'
-                ]);
-            }
-            //检验新密码和原密码是否一致
-            $old_psw = $is_exist['password'];
-            if (md5(config('setting.user_salt').$psw)==$old_psw){
-                throw new UpdateException([
-                    'msg' => '新密码不可与旧密码一样！'
-                ]);
-            }
-            //修改
-            $result = $user->where([
-                'id' => $uid
-            ])->update([
-                'password' => md5(config('setting.user_salt').$psw)
-            ]);
+        }else{
+            $result = $user->save([
+                'name'  => $name,
+                'number' => $number,
+                'grade' => $grade,
+                'phone' => $phone
+            ],['id' => $uid]);
             if (!$result){
                 throw new UpdateException();
             }
             return json_encode([
                 'code' => 200,
-                'msg' => '修改成功！'
+                'msg' => '成功'
             ]);
-        }elseif ($type == 'A003'){
-            //退出登录接口
-            $id = $TokenModel->get_id();
-            cache($token, NULL);
-            return json_encode([
-                'code' => 200,
-                'msg' => '退出成功！'
-            ]);
-        }elseif ($type == 'A004'){
-            //返回用户信息接口
-            $id = $TokenModel->get_id();
-            $result = $user->get_user_info($data);
-            return $result;
-        }elseif ($type == 'A005'){
-            //返回用户信息接口
-            $id = $TokenModel->get_id();
-            $result = $user->get_user_term();
-            return $result;
-        }elseif ($type == 'A006'){
-            //保存前端传过来的id并且设置存活时间
-            $id = $TokenModel->get_id();
-            if (!array_key_exists('id',$data)){
-                throw new BaseException([
-                    'msg' => '未传入二维码标识'
-                ]);
-            }
-            $rule = [
-                'id'  => 'require'
-            ];
-            $msg = [
-                'id.require' => '二维码标识不能为空'
-            ];
-            $validate = new Validate($rule,$msg);
-            $result   = $validate->check($data);
-            if(!$result){
-                throw new BaseException([
-                    'msg' => $validate->getError()
-                ]);
-            }
-            cache($data['id'],1,config('setting.code_time'));
-            return json_encode([
-                'code' => 200,
-                'msg' => 'success'
-            ]);
-        }elseif ($type == 'A007'){
-            $result = $user->sign_up($data);
-            return $result;
-        }elseif ($type == 'A008'){
-            //展示首页
-            $id = $TokenModel->get_id();
-            $result = $user->get_top_info();
-            return $result;
-        }elseif ($type == 'A009'){
-            $result = $user->sign_out($data);
-            return $result;
-        }elseif ($type == 'B001'){
-            //管理员登录
-            //登录
-            //验证是否有传参
-            $user->admin_login_exist($token,$data);
-            //验证传参的格式是否正确(白名单)
-            (new LoginValidate())->goToCheck($data);
-            //校验
-            $username = $data['username'];
-            $password = $data['password'];
-            //查用户
-            $exist_user = $Super->where([
-                'admin' => $username,
-            ])->find();
-            if (!$exist_user){
-                exit(json_encode([
-                    'code' => 404,
-                    'msg' => '用户不存在！'
-                ]));
-            }
-            $is_exist = $Super->where([
-                'admin' => $username,
-                'psw' => md5('Quanta'.$password)
-            ])->field('id,scope')->find();
-            if (!$is_exist){
-                exit(json_encode([
-                    'code' => 405,
-                    'msg' => '密码错误！'
-                ]));
-            }
-            //查id
-            $id = $is_exist['id'];
-            if ($is_exist['scope'] != 32){
-                exit(json_encode([
-                    'code' => 403,
-                    'msg' => '权限不足！'
-                ]));
-            }
-
-            //获得token
-            $tk = $admin_token->grantToken($id);
-            return json([
-                'code' => 200,
-                'msg' => $tk
-            ]);
-        }elseif ($type=='B002'){
-            $result = $user->get_admin_name();
-            return $result;
-        }elseif ($type == 'B003'){
-            //发布会议
-            $result = $Super->set_meeting($data);
-            return $result;
-        }elseif ($type == 'B004'){
-            $id = $TokenModel->get_id();
-            $secret = $TokenModel->checkUser();
-            if ($secret != 32){
-                exit(json_encode([
-                    'code' => 403,
-                    'msg' => '权限不足！'
-                ]));
-            }
-            cache($token, NULL);
-            return json_encode([
-                'code' => 200,
-                'msg' => '退出成功！'
-            ]);
-        }elseif ($type == 'B005'){
-            //查看单个会议情况
-            $result = $Super->show_single_meeting($data);
-            return $result;
-        }elseif ($type == 'B006'){
-            //显示学期
-            $result = $Super->show_term();
-            return $result;
-        }elseif ($type == 'B007'){
-            //一次查看一个列表的会议
-            $result = $Super->show_all_meeting($data);
-            return $result;
-        }elseif ($type == 'B008'){
-            //查看会议条数
-            $result = $Super->get_meeting_number($data);
-            return $result;
-        }elseif ($type == 'B009'){
-            //在发布会议下面的展示会议的成员
-            $result = $Super->show_all_person($data);
-            return $result;
-        }elseif ($type == 'B010'){
-            //获取用户的数目
-            $result = $Super->all_person_count();
-            return $result;
-        }elseif ($type == 'B011'){
-            //删除会议
-            $result = $Super->delete_meeting($data);
-            return $result;
-        }elseif ($type == 'B012'){
-            //删除成员
-            $result = $Super->delete_member($data);
-            return $result;
-        }elseif ($type == 'B013'){
-            //展示每个会议每条成员情况（出勤查看）
-            $result = $Super->attendance_check($data);
-            return $result;
-        }elseif ($type == 'B014'){
-            //改变会议成员出席情况
-            $result = $Super->change_state($data);
-            return $result;
-        }elseif ($type == 'B015'){
-            //改变会议成员出席情况
-            $result = $Super->search($data);
-            return $result;
-        }elseif ($type == 'B016'){
-            //改变会议成员出席情况
-            $result = $Super->create_attendance_check($data);
-            return $result;
-        }elseif ($type == 'B017'){
-            //搜索出勤详情导出
-            $result = $Super->create_search($data);
-            return $result;
-        }elseif ($type == 'B018'){
-            //搜索出勤详情导出
-            $result = $Super->create_code($data);
-            return $result;
-        }elseif ($type == 'B019'){
-            //修改会议
-            $result = $Super->change_meeting($data);
-            return $result;
-        }elseif ($type == 'B020'){
-            //生成签退二维码
-            $result = $Super->create_sign_out_code($data);
-            return $result;
-        }elseif ($type == 'B021'){
-            $result = $Super->change_single_state($data);
-            return $result;
-        }elseif ($type == 'B022'){
-            $result = $Super->create_single_meeting($data);
-            return $result;
-        }elseif ($type == 'B023'){
-            $result = $Super->be_start($data);
-            return $result;
-        }elseif ($type == 'B024'){
-            $result = $Super->be_end($data);
-            return $result;
         }
-//        elseif ($type == 'BBBB'){
-////            //搜索出勤详情导出
-////            $result = $Super->in(COMMON_PATH.'static/member.xlsx');
-////            return $result;
-////
-////            //删除测试账号
-////            Db::table('meeting_member')->where('user_id' ,'<',200)->delete();
-//        }
-        else{
+    }
+
+    public function publish_good(){
+        $post = input('post.');
+        if (!$post){
             exit(json_encode([
-                'code' => 404,
-                'msg' => '未找到此类型！'
+                'code' => 403,
+                'msg' => '未传入任何参数！'
             ]));
         }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $TokenModel = new Token();
+        //接收参数
+        $data = $post['data'];
+        $name = $data['name'];
+        $type = $data['type'];
+        $description = $data['description'];
+        $price = $data['price'];
+        $new = $data['new'];
+        $address = $data['address'];
+        $cost = $data['cost'];
+        $time = (int)time();
+        $uid = $TokenModel->get_id();
+        //接收图片
+        $photo = Request::instance()->file('photo');
+        if ($photo){
+            $info = $photo->validate(['size'=> 7242880,'ext'=>'jpg,jpeg,png,bmp,gif'])->move('upload');
+            if ($info && $info->getPathname()) {
+                $url = $info->getPathname();
+                $result = Db::table('good')
+                    ->insert([
+                        'name' => $name,
+                        'type' => $type,
+                        'description' => $description,
+                        'publish_id' => $uid,
+                        'photo' => $url,
+                        'price' => $price,
+                        'new' => $new,
+                        'address' => $address,
+                        'cost' => $cost,
+                        'time' => $time
+                    ]);
+                if (!$result){
+                    if (is_file(COMMON.$url)){
+                        unlink(COMMON.$url);
+                    }
+                    throw new UpdateException();
+                }
+            } else {
+                throw new BaseException([
+                    'msg' => '请检验上传图片格式（jpg,jpeg,png,bmp,gif）！'
+                ]);
+            }
+        }else{
+            $result = Db::table('good')
+                ->insert([
+                    'name' => $name,
+                    'type' => $type,
+                    'description' => $description,
+                    'publish_id' => $uid,
+                    'price' => $price,
+                    'new' => $new,
+                    'address' => $address,
+                    'cost' => $cost,
+                    'time' => $time
+                ]);
+            if (!$result){
+                throw new UpdateException();
+            }
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => '发布成功！'
+        ]);
     }
 
-    private function attackfilter($data,$msg='用户名错误'){//登录过滤
-        $user_name = $data;
-        $filter = "/`|'|\||and|union|select|from|regexp|like|=|information_schema|where|union|join|sleep|benchmark|,|\(|\)/is";
-        if (preg_match($filter,$user_name)==1){
-            throw new BaseException([
-                'msg' => $msg
+    public function show_class(){
+        $uid = (new Token())->get_id();
+        $result = Db::table('good')
+            ->distinct('type')
+            ->field('type')
+            ->select();
+        $r = [];
+        $i = 0;
+        foreach ($result as $v){
+            $r[$i]['type'] = $v['type'];
+            $i++;
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
+    }
+
+    public function show_class_good(){
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        $class = $data['type'];
+        $uid = (new Token())->get_id();
+
+        $result = Db::table('good')
+            ->where([
+                'type' => $class,
+                'status' => 0
+            ])
+            ->select();
+        $r = [];
+        $i = 0;
+        foreach ($result as $v){
+            $c = Db::table('collect')
+                ->where([
+                    'u_id' => $uid,
+                    'g_id' => $v['id']
+                ])->find();
+            if ($c){
+                $r[$i]['is_collect'] = 1;
+            }else{
+                $r[$i]['is_collect'] = 0;
+            }
+            $r[$i]['id'] = $v['id'];
+            $r[$i]['name'] = $v['name'];
+            $r[$i]['type'] = $v['type'];
+            $r[$i]['description'] = $v['description'];
+            $r[$i]['publish_id'] = $v['publish_id'];
+            $d = Db::table('user')
+                ->where([
+                    'id' => $v['publish_id']
+                ])->find();
+            $r[$i]['user_name'] = $d['name'];
+            $r[$i]['user_grade'] = $d['grade'];
+            $r[$i]['user_number'] = $d['number'];
+            $r[$i]['user_phone'] = $d['phone'];
+            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['price'] = $v['price'];
+            $r[$i]['new'] = $v['new'];
+            $r[$i]['address'] = $v['address'];
+            $r[$i]['cost'] = $v['cost'];
+            $r[$i]['time'] = date('Y-m-d',$v['time']);
+            $i++;
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
+    }
+
+    public function recommend(){
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        $uid = (new Token())->get_id();
+
+        $result = Db::table('good')
+            ->order([
+                'time' => 'desc',
+                'status' => 0
+            ])
+            ->select();
+        $r = [];
+        $i = 0;
+        foreach ($result as $v){
+            $c = Db::table('collect')
+                ->where([
+                    'u_id' => $uid,
+                    'g_id' => $v['id']
+                ])->find();
+            if ($c){
+                $r[$i]['is_collect'] = 1;
+            }else{
+                $r[$i]['is_collect'] = 0;
+            }
+            $r[$i]['id'] = $v['id'];
+            $r[$i]['name'] = $v['name'];
+            $r[$i]['type'] = $v['type'];
+            $r[$i]['description'] = $v['description'];
+            $r[$i]['publish_id'] = $v['publish_id'];
+            $d = Db::table('user')
+                ->where([
+                    'id' => $v['publish_id']
+                ])->find();
+            $r[$i]['user_name'] = $d['name'];
+            $r[$i]['user_grade'] = $d['grade'];
+            $r[$i]['user_number'] = $d['number'];
+            $r[$i]['user_phone'] = $d['phone'];
+            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['price'] = $v['price'];
+            $r[$i]['new'] = $v['new'];
+            $r[$i]['address'] = $v['address'];
+            $r[$i]['cost'] = $v['cost'];
+            $r[$i]['time'] = date('Y-m-d',$v['time']);
+            $i++;
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
+    }
+
+    public function collect(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('good_id',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入商品id'
+            ]));
+        }
+        $good_id = $data['good_id'];
+        $result = Db::table('collect')
+            ->insert([
+                'u_id' => $uid,
+                'g_id' => $good_id
             ]);
+        if (!$result){
+            throw new UpdateException([
+                'msg' => '收藏失败'
+            ]);
+        }
+        return json_encode([
+            'code' => 200,
+            'msg' => '收藏成功'
+        ]);
+    }
+
+    public function search(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('search_word',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入搜索关键词'
+            ]));
+        }
+        $key = $data['search_word'];
+        $result = Db::table('good')
+            ->where('name','like','%'.$key.'%')
+            ->select();
+        if (!$result){
+            exit(json_encode([
+                'code' => 400,
+                'msg' => '未找到'
+            ]));
+        }
+
+        $r = [];
+        $i = 0;
+        foreach ($result as $v){
+            $c = Db::table('collect')
+                ->where([
+                    'u_id' => $uid,
+                    'g_id' => $v['id']
+                ])->find();
+            if ($c){
+                $r[$i]['is_collect'] = 1;
+            }else{
+                $r[$i]['is_collect'] = 0;
+            }
+            $r[$i]['id'] = $v['id'];
+            $r[$i]['name'] = $v['name'];
+            $r[$i]['type'] = $v['type'];
+            $r[$i]['description'] = $v['description'];
+            $r[$i]['publish_id'] = $v['publish_id'];
+            $d = Db::table('user')
+                ->where([
+                    'id' => $v['publish_id']
+                ])->find();
+            $r[$i]['user_name'] = $d['name'];
+            $r[$i]['user_grade'] = $d['grade'];
+            $r[$i]['user_number'] = $d['number'];
+            $r[$i]['user_phone'] = $d['phone'];
+            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['price'] = $v['price'];
+            $r[$i]['new'] = $v['new'];
+            $r[$i]['address'] = $v['address'];
+            $r[$i]['cost'] = $v['cost'];
+            $r[$i]['time'] = date('Y-m-d',$v['time']);
+            if ((int)$v['status']==1){
+                $r[$i]['status'] = '已卖出';
+            }else{
+                $r[$i]['status'] = '未卖出';
+            }
+
+            $i++;
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
+    }
+
+    public function my_publish(){
+        $uid = (new Token())->get_id();
+        $result = Db::table('good')
+            ->where([
+                'publish_id' => $uid
+            ])->select();
+        if (!$result){
+            exit(json_encode([
+                'code' => 400,
+                'msg' => '您尚未发布宝贝'
+            ]));
+        }
+
+        $r = [];
+        $i = 0;
+        foreach ($result as $v){
+            $c = Db::table('collect')
+                ->where([
+                    'u_id' => $uid,
+                    'g_id' => $v['id']
+                ])->find();
+            if ($c){
+                $r[$i]['is_collect'] = 1;
+            }else{
+                $r[$i]['is_collect'] = 0;
+            }
+            $r[$i]['id'] = $v['id'];
+            $r[$i]['name'] = $v['name'];
+            $r[$i]['type'] = $v['type'];
+            $r[$i]['description'] = $v['description'];
+            $r[$i]['publish_id'] = $v['publish_id'];
+            $d = Db::table('user')
+                ->where([
+                    'id' => $v['publish_id']
+                ])->find();
+            $r[$i]['user_name'] = $d['name'];
+            $r[$i]['user_grade'] = $d['grade'];
+            $r[$i]['user_number'] = $d['number'];
+            $r[$i]['user_phone'] = $d['phone'];
+            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['price'] = $v['price'];
+            $r[$i]['new'] = $v['new'];
+            $r[$i]['address'] = $v['address'];
+            $r[$i]['cost'] = $v['cost'];
+            $r[$i]['time'] = date('Y-m-d',$v['time']);
+            if ((int)$v['status']==1){
+                $r[$i]['status'] = '已卖出';
+            }else{
+                $r[$i]['status'] = '未卖出';
+            }
+            $i++;
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
+    }
+
+    public function delete_good(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('good_id',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入宝贝id'
+            ]));
+        }
+        $good_id = $data['good_id'];
+
+        $result = Db::table('good')
+            ->where([
+                'id' => $good_id,
+                'publish_id' => $uid
+            ])->find();
+        if (!$result){
+            throw new BaseException([
+                'msg' => '未找到该宝贝，或者这件宝贝并非你发布的'
+            ]);
+        }
+        //开启事务
+        Db::startTrans();
+        $r = Db::table('good')
+            ->where([
+                'id' => $good_id
+            ])->delete();
+
+        if (!$r){
+            Db::rollback();
+            throw new UpdateException([
+                'msg' => '删除失败'
+            ]);
+        }
+
+        $rr = Db::table('orders')
+            ->where('good_id')
+            ->delete();
+        if (!$rr){
+            Db::rollback();
+            throw new UpdateException([
+                'msg' => '删除失败'
+            ]);
+        }
+        Db::commit();
+
+        return json_encode([
+            'code' => 200,
+            'msg' => '删除成功'
+        ]);
+    }
+
+    public function show_collect(){
+        $uid = (new Token())->get_id();
+        $rr = Db::table('collect')
+            ->where([
+                'u_id' => $uid
+            ])->select();
+        if (!$rr){
+            exit(json_encode([
+                'code' => 400,
+                'msg' => '您尚未收藏宝贝'
+            ]));
+        }
+        $r = [];
+        $i = 0;
+        foreach ($rr as $k){
+            $id = $k['g_id'];
+            $v = Db::table('good')
+                ->where([
+                    'id' => $id
+                ])->find();
+            $c = Db::table('collect')
+                ->where([
+                    'u_id' => $uid,
+                    'g_id' => $v['id']
+                ])->find();
+            if ($c){
+                $r[$i]['is_collect'] = 1;
+            }else{
+                $r[$i]['is_collect'] = 0;
+            }
+            $r[$i]['id'] = $v['id'];
+            $r[$i]['name'] = $v['name'];
+            $r[$i]['type'] = $v['type'];
+            $r[$i]['description'] = $v['description'];
+            $r[$i]['publish_id'] = $v['publish_id'];
+            $d = Db::table('user')
+                ->where([
+                    'id' => $v['publish_id']
+                ])->find();
+            $r[$i]['user_name'] = $d['name'];
+            $r[$i]['user_grade'] = $d['grade'];
+            $r[$i]['user_number'] = $d['number'];
+            $r[$i]['user_phone'] = $d['phone'];
+            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['price'] = $v['price'];
+            $r[$i]['new'] = $v['new'];
+            $r[$i]['address'] = $v['address'];
+            $r[$i]['cost'] = $v['cost'];
+            $r[$i]['time'] = date('Y-m-d',$v['time']);
+            if ((int)$v['status']==1){
+                $r[$i]['status'] = '已卖出';
+            }else{
+                $r[$i]['status'] = '未卖出';
+            }
+            $i++;
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
+    }
+
+    public function delete_collect(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('good_id',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入宝贝id'
+            ]));
+        }
+        $good_id = $data['good_id'];
+
+        $check =  Db::table('collect')
+            ->where([
+                'u_id' => $uid,
+                'g_id' => $good_id
+            ])->delete();
+        if (!$check){
+            throw new UpdateException([
+                'msg' => '取消收藏失败'
+            ]);
+        }
+        return json_encode([
+            'code' => 200,
+            'msg' => '成功'
+        ]);
+    }
+    //获取消息
+    public function get_message(){
+        $uid = (new Token())->get_id();
+        $result = Db::table('message')
+            ->where([
+                'u_id' => $uid
+            ])->order([
+                'time' => 'desc'
+            ])->select();
+        if (!$result){
+            exit(json_encode([
+                'code' => 400,
+                'msg' => '暂无消息'
+            ]));
+        }
+        $r = [];
+        $i = 0;
+        foreach ($result as $v){
+            $r[$i]['id'] = $v['id'];
+            $r[$i]['text'] = $v['text'];
+            $r[$i]['u_id'] = $v['u_id'];
+            $r[$i]['time'] = date('Y-m-d',$v['time']);
+            $i++;
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
+    }
+    //确认购买
+    public function confirm(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('good_id',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入宝贝id'
+            ]));
+        }
+        $good_id = $data['good_id'];
+
+        $check = Db::table('good')
+            ->where([
+                'id' => $good_id
+            ])->find();
+        $s_id = $check['publish_id'];
+        $b_id = $uid;
+        $time = time();
+
+
+        $result = Db::table('orders')
+            ->insert([
+                'good_id' => $good_id,
+                's_id' => $s_id,
+                'b_id' => $b_id,
+                'status' => '确认购买',
+                'time' => $time
+            ]);
+        if (!$result){
+            throw new UpdateException([
+                'msg' => '生成订单失败'
+            ]);
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => '成功'
+        ]);
+    }
+    //发货
+    public function deliver(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('good_id',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入宝贝id'
+            ]));
+        }
+        $good_id = $data['good_id'];
+
+
+        $check = Db::table('orders')
+            ->where([
+                'good_id' => $good_id,
+                's_id' => $uid
+            ])->find();
+        $status = $check['status'];
+        if ($status != '已发货'){
+            $result = Db::table('orders')
+                ->where([
+                    'good_id' => $good_id,
+                    's_id' => $uid
+                ])
+                ->update([
+                    'status' => '已发货'
+                ]);
+            if (!$result){
+                throw new UpdateException([
+                    'msg' => '确认失败'
+                ]);
+            }
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => '成功'
+        ]);
+    }
+
+    //收货
+    public function take(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('good_id',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入宝贝id'
+            ]));
+        }
+        $good_id = $data['good_id'];
+
+
+        $check = Db::table('orders')
+            ->where([
+                'good_id' => $good_id,
+                'b_id' => $uid
+            ])->find();
+        $status = $check['status'];
+        if ($status != '已收货'){
+            $result = Db::table('orders')
+                ->where([
+                    'good_id' => $good_id,
+                    'b_id' => $uid
+                ])
+                ->update([
+                    'status' => '已收货'
+                ]);
+            if (!$result){
+                throw new UpdateException([
+                    'msg' => '确认失败'
+                ]);
+            }
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => '成功'
+        ]);
+    }
+
+    //评论
+    public function comment(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('good_id',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入宝贝id'
+            ]));
+        }
+        if (!array_key_exists('comment',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '未传入评论内容'
+            ]));
+        }
+        $good_id = $data['good_id'];
+        $comment = $data['comment'];
+
+
+        $check = Db::table('good')
+            ->where([
+                'id' => $good_id,
+            ])->find();
+        $publish_id = $check['publish_id'];
+        $status = $check['status'];
+
+
+        Db::startTrans();
+        $r = Db::table('comment')
+            ->insert([
+                's_id' => $publish_id,
+                'b_id' => $uid,
+                'comment' => $comment
+            ]);
+        if (!$r){
+            Db::rollback();
+            throw new UpdateException([
+                'msg' => '评论失败'
+            ]);
+        }
+
+        if ($status != '已评论'){
+            $result = Db::table('orders')
+                ->where([
+                    'good_id' => $good_id,
+                    'b_id' => $uid
+                ])
+                ->update([
+                    'status' => '已评论'
+                ]);
+            if (!$result){
+                Db::rollback();
+                throw new UpdateException([
+                    'msg' => '评论失败'
+                ]);
+            }
+        }
+        Db::commit();
+
+        return json_encode([
+            'code' => 200,
+            'msg' => '成功'
+        ]);
+    }
+
+    //我卖出的
+    public function my_out(){
+        $uid = (new Token())->get_id();
+        $check = Db::table('orders')
+            ->where([
+                's_id' => $uid
+            ])->select();
+        if (!$check){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '还没有卖出的宝贝'
+            ]));
+        }
+        $r = [];
+        $i = 0;
+        foreach ($check as $k){
+            $good_id = $k['good_id'];
+            $v = Db::table('good')
+                ->where([
+                    'id' => $good_id
+                ])->find();
+            $c = Db::table('collect')
+                ->where([
+                    'u_id' => $uid,
+                    'g_id' => $v['id']
+                ])->find();
+            if ($c){
+                $r[$i]['is_collect'] = 1;
+            }else{
+                $r[$i]['is_collect'] = 0;
+            }
+            $r[$i]['id'] = $v['id'];
+            $r[$i]['name'] = $v['name'];
+            $r[$i]['type'] = $v['type'];
+            $r[$i]['description'] = $v['description'];
+            $r[$i]['publish_id'] = $v['publish_id'];
+            $d = Db::table('user')
+                ->where([
+                    'id' => $v['publish_id']
+                ])->find();
+            $r[$i]['user_name'] = $d['name'];
+            $r[$i]['user_grade'] = $d['grade'];
+            $r[$i]['user_number'] = $d['number'];
+            $r[$i]['user_phone'] = $d['phone'];
+            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['price'] = $v['price'];
+            $r[$i]['new'] = $v['new'];
+            $r[$i]['address'] = $v['address'];
+            $r[$i]['cost'] = $v['cost'];
+            $r[$i]['time'] = date('Y-m-d',$v['time']);
+            $r[$i]['status'] = $k['status'];
+            $i++;
         }
     }
 
+    //我买到的
+    public function my_in(){
+        $uid = (new Token())->get_id();
+        $check = Db::table('orders')
+            ->where([
+                'b_id' => $uid
+            ])->select();
+        if (!$check){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '还没有卖出的宝贝'
+            ]));
+        }
+        $r = [];
+        $i = 0;
+        foreach ($check as $k){
+            $good_id = $k['good_id'];
+            $v = Db::table('good')
+                ->where([
+                    'id' => $good_id
+                ])->find();
+            $c = Db::table('collect')
+                ->where([
+                    'u_id' => $uid,
+                    'g_id' => $v['id']
+                ])->find();
+            if ($c){
+                $r[$i]['is_collect'] = 1;
+            }else{
+                $r[$i]['is_collect'] = 0;
+            }
+            $r[$i]['id'] = $v['id'];
+            $r[$i]['name'] = $v['name'];
+            $r[$i]['type'] = $v['type'];
+            $r[$i]['description'] = $v['description'];
+            $r[$i]['publish_id'] = $v['publish_id'];
+            $d = Db::table('user')
+                ->where([
+                    'id' => $v['publish_id']
+                ])->find();
+            $r[$i]['user_name'] = $d['name'];
+            $r[$i]['user_grade'] = $d['grade'];
+            $r[$i]['user_number'] = $d['number'];
+            $r[$i]['user_phone'] = $d['phone'];
+            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['price'] = $v['price'];
+            $r[$i]['new'] = $v['new'];
+            $r[$i]['address'] = $v['address'];
+            $r[$i]['cost'] = $v['cost'];
+            $r[$i]['time'] = date('Y-m-d',$v['time']);
+            $r[$i]['status'] = $k['status'];
+            $i++;
+        }
+    }
 }

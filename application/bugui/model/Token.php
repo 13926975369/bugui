@@ -78,9 +78,9 @@ class Token extends BaseModel
      * @ 注册或者登录获取token令牌
      * @ $code  小程序获取的code码
      */
-    public function get_token($code,$id) {
+    public function get_token($code) {
         $ut = new UserToken($code);
-        $token = $ut->gett($code,$id);
+        $token = $ut->gett($code);
         return $token;
     }
 }

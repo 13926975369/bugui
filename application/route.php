@@ -9,13 +9,13 @@
 // | Author: liu21st <liu21st@gmail.com>
 // +----------------------------------------------------------------------
 
-return [
-    '__pattern__' => [
-        'name' => '\w+',
-    ],
-    '[hello]'     => [
-        ':id'   => ['index/hello', ['method' => 'get'], ['id' => '\d+']],
-        ':name' => ['index/hello', ['method' => 'post']],
-    ],
+use \think\Route;
 
-];
+Route::rule('login','bugui/Index/login','POST',['https'=>false]);
+Route::rule('first_time','bugui/Index/first_time','POST',['https'=>false]);
+Route::rule('publish_good','bugui/Index/publish_good','POST',['https'=>false]);
+Route::rule('show_class','bugui/Index/show_class','POST',['https'=>false]);
+Route::rule('show_class_good','bugui/Index/show_class_good','POST',['https'=>false]);
+Route::rule('collect','bugui/Index/collect','POST',['https'=>false]);
+Route::rule('search','bugui/Index/search','POST',['https'=>false]);
+Route::rule('change_info','bugui/Index/change_info','POST',['https'=>false]);

@@ -25,7 +25,7 @@ class UserToken extends Token
     protected $wxAppSecret;
     protected $wxLoginurl;
 
-    public function gett($code,$id){
+    public function gett($code){
         $this->code = $code;
         $this->wxAppID = config('wx.app_id');
         $this->wxAppSecret = config('wx.app_secret');
@@ -43,41 +43,34 @@ class UserToken extends Token
                 $this->processLoginError($wxResult);
             }else{
                 //检测没有报错的话就去取token
-                return $this->grantToken($wxResult,$id);
+                return $this->grantToken($wxResult);
             }
         }
     }
 
-    public function grantToken($wxResult,$id){
-        //验证id
-        (new IDMustBeNumber())->goToCheck([
-            'id' => $id
-        ]);
-        //检验id在的时候，这里的openid等于它
+    public function grantToken($wxResult){
         $openid = $wxResult['openid'];
         $user = Db::table('user')->where([
-            'id' => $id
-        ])->field('openid')->find();
-        $user_openid = $user['openid'];
-        if ($user_openid == NULL){
-            Db::table('user')->where([
-                'id' => $id
-            ])->update([
+            'openid' => $openid
+        ])->field('id')->find();
+        if (!$user){
+            $get_id = Db::table('user')->insertGetId([
                 'openid' => $openid
             ]);
+            $this->uid = $get_id;
+            //1代表首次登录
+            $type = 1;
         }else{
-            if ($user_openid != $openid){
-                throw new LoginException([
-                    'msg' => '微信号与用户账号不匹配！'
-                ]);
-            }
+            $this->uid = $user['id'];
+            //2代表再次登录
+            $type = 2;
         }
-        $this->uid = $id;
+
         //这是一个拼接token的函数，32随机+时间戳+salt
         //key就是token，value包含uid，scope
         //拿到钥匙
         $key = $this->gettoken();
-        $cachedValue['id'] = $id;
+        $cachedValue['id'] = $this->uid;
         //scope为权限
         $cachedValue['secret'] = 16;
         $this->secret  = 16;
@@ -91,7 +84,10 @@ class UserToken extends Token
                 'msg' => '服务器缓存异常',
             ]);
         }
-        return $key;
+        return [
+            'token' => $key,
+            'type' => $type
+        ];
     }
 
     /*
