@@ -74,8 +74,21 @@ class Index extends Collection
         $number = $data['number'];
         $grade = $data['grade'];
         $phone = $data['phone'];
-        $user = new User();
+        $portrait = $data['portrait'];
+        $phonecode = $data['phonecode'];
+        $set = Cache::get($phonecode);
+        if (!$set){
+            throw new BaseException([
+                'msg' => '未发送手机验证码'
+            ]);
+        }
         $uid = $TokenModel->get_id();
+        if ($set['phone'] != $phone||$set['uid'] != $uid){
+            throw new BaseException([
+                'msg' => '验证码和手机或者用户不匹配'
+            ]);
+        }
+        $user = new User();
         $check = Db::table('user')->where([
             'id' => $uid
         ])->field('name,number,grade,phone')->find();
@@ -85,11 +98,12 @@ class Index extends Collection
                 'msg' => '成功'
             ]);
         }else{
-            $result = $user->save([
+            $result = (new User())->save([
                 'name'  => $name,
                 'number' => $number,
                 'grade' => $grade,
-                'phone' => $phone
+                'phone' => $phone,
+                'portrait' => $portrait
             ],['id' => $uid]);
             if (!$result){
                 throw new UpdateException();
@@ -109,42 +123,231 @@ class Index extends Collection
                 'msg' => '未传入任何参数！'
             ]));
         }
-        if (!array_key_exists('data',$post)){
-            exit(json_encode([
-                'code' => 403,
-                'msg' => '第二项参数缺失，禁止请求！'
-            ]));
-        }
         $TokenModel = new Token();
         //接收参数
-        $data = $post['data'];
-        $name = $data['name'];
-        $type = $data['type'];
-        $description = $data['description'];
-        $price = $data['price'];
-        $new = $data['new'];
-        $address = $data['address'];
-        $cost = $data['cost'];
+        $name = $post['name'];
+        $type = $post['type'];
+        $description = $post['description'];
+        $price = $post['price'];
+        $new = $post['new'];
+        $address = $post['address'];
+        $cost = $post['cost'];
         $time = (int)time();
         $uid = $TokenModel->get_id();
-        //接收图片
+//            $url = [];
+//            if (is_array($photo)){
+//                $number = count($photo);
+//                $i = 0;
+//                foreach ($photo as $single){
+//                    $info = $single->validate(['size'=> 7242880,'ext'=>'jpg,jpeg,png,bmp,gif'])->move('upload');
+//                    if ($info && $info->getPathname()) {
+//                        $url[$i] = $info->getPathname();
+//                    } else {
+//                        throw new BaseException([
+//                            'msg' => '请检验上传图片格式（jpg,jpeg,png,bmp,gif）！'
+//                        ]);
+//                    }
+//                    $i++;
+//                }
+//
+//                if ($number == 1){
+//                    $result = Db::table('good')
+//                        ->insert([
+//                            'name' => $name,
+//                            'type' => $type,
+//                            'description' => $description,
+//                            'publish_id' => $uid,
+//                            'photo1' => $url[0],
+//                            'price' => $price,
+//                            'new' => $new,
+//                            'address' => $address,
+//                            'cost' => $cost,
+//                            'time' => $time,
+//                            'photo_number' => 1
+//                        ]);
+//                    if (!$result){
+//                        if (is_file(COMMON.$url[0])){
+//                            unlink(COMMON.$url[0]);
+//                        }
+//                        throw new UpdateException();
+//                    }
+//                }elseif ($number == 2){
+//                    $result = Db::table('good')
+//                        ->insert([
+//                            'name' => $name,
+//                            'type' => $type,
+//                            'description' => $description,
+//                            'publish_id' => $uid,
+//                            'photo1' => $url[0],
+//                            'photo2' => $url[1],
+//                            'price' => $price,
+//                            'new' => $new,
+//                            'address' => $address,
+//                            'cost' => $cost,
+//                            'time' => $time,
+//                            'photo_number' => 2
+//                        ]);
+//                    if (!$result){
+//                        if (is_file(COMMON.$url[0])){
+//                            unlink(COMMON.$url[0]);
+//                        }
+//                        if (is_file(COMMON.$url[1])){
+//                            unlink(COMMON.$url[1]);
+//                        }
+//                        throw new UpdateException();
+//                    }
+//                }elseif ($number == 3){
+//                    $result = Db::table('good')
+//                        ->insert([
+//                            'name' => $name,
+//                            'type' => $type,
+//                            'description' => $description,
+//                            'publish_id' => $uid,
+//                            'photo1' => $url[0],
+//                            'photo2' => $url[1],
+//                            'photo3' => $url[2],
+//                            'price' => $price,
+//                            'new' => $new,
+//                            'address' => $address,
+//                            'cost' => $cost,
+//                            'time' => $time,
+//                            'photo_number' => 3
+//                        ]);
+//                    if (!$result){
+//                        if (is_file(COMMON.$url[0])){
+//                            unlink(COMMON.$url[0]);
+//                        }
+//                        if (is_file(COMMON.$url[1])){
+//                            unlink(COMMON.$url[1]);
+//                        }
+//                        if (is_file(COMMON.$url[2])){
+//                            unlink(COMMON.$url[2]);
+//                        }
+//                        throw new UpdateException();
+//                    }
+//                }elseif ($number == 4){
+//                    $result = Db::table('good')
+//                        ->insert([
+//                            'name' => $name,
+//                            'type' => $type,
+//                            'description' => $description,
+//                            'publish_id' => $uid,
+//                            'photo1' => $url[0],
+//                            'photo2' => $url[1],
+//                            'photo3' => $url[2],
+//                            'photo4' => $url[3],
+//                            'price' => $price,
+//                            'new' => $new,
+//                            'address' => $address,
+//                            'cost' => $cost,
+//                            'time' => $time,
+//                            'photo_number' => 4
+//                        ]);
+//                    if (!$result){
+//                        if (is_file(COMMON.$url[0])){
+//                            unlink(COMMON.$url[0]);
+//                        }
+//                        if (is_file(COMMON.$url[1])){
+//                            unlink(COMMON.$url[1]);
+//                        }
+//                        if (is_file(COMMON.$url[2])){
+//                            unlink(COMMON.$url[2]);
+//                        }
+//                        if (is_file(COMMON.$url[3])){
+//                            unlink(COMMON.$url[3]);
+//                        }
+//                        throw new UpdateException();
+//                    }
+//                }
+//            }else{
+//                $info = $photo->move('upload');
+//                if ($info && $info->getPathname()) {
+//                    $url = $info->getPathname();
+//                    $result = Db::table('good')
+//                        ->insert([
+//                            'name' => $name,
+//                            'type' => $type,
+//                            'description' => $description,
+//                            'publish_id' => $uid,
+//                            'photo1' => $url,
+//                            'price' => $price,
+//                            'new' => $new,
+//                            'address' => $address,
+//                            'cost' => $cost,
+//                            'time' => $time,
+//                            'photo_number' => 1
+//                        ]);
+//                    if (!$result){
+//                        if (is_file(COMMON.$url)){
+//                            unlink(COMMON.$url);
+//                        }
+//                        throw new UpdateException();
+//                    }
+//                }
+//            }
+
+        $result = Db::table('good')
+            ->insertGetId([
+                'name' => $name,
+                'type' => $type,
+                'description' => $description,
+                'publish_id' => $uid,
+                'price' => $price,
+                'new' => $new,
+                'address' => $address,
+                'cost' => $cost,
+                'time' => $time
+            ]);
+        if (!$result){
+            throw new UpdateException();
+        }
+        return json([
+            'code' => 200,
+            'msg' => $result
+        ]);
+    }
+
+    //发布商品图片信息
+    public function good_photo(){
+        $uid = (new Token())->get_id();
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 400,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('good_id',$post)){
+            exit(json_encode([
+                'code' => 400,
+                'msg' => '未传入good_id'
+            ]));
+        }
+        $good_id = $post['good_id'];
         $photo = Request::instance()->file('photo');
-        if ($photo){
-            $info = $photo->validate(['size'=> 7242880,'ext'=>'jpg,jpeg,png,bmp,gif'])->move('upload');
+        if (!$photo){
+            throw new BaseException([
+                'msg' => '请上传图片'
+            ]);
+        }
+        $check = $result = Db::table('good')
+            ->where([
+                'id' => $good_id
+            ])->find();
+        $photo_number = $check['photo_number'];
+        if ($photo_number < 4){
+            $photo_number++;
+            $field = 'photo'.$photo_number;
+            $info = $photo->move('upload');
             if ($info && $info->getPathname()) {
                 $url = $info->getPathname();
                 $result = Db::table('good')
-                    ->insert([
-                        'name' => $name,
-                        'type' => $type,
-                        'description' => $description,
-                        'publish_id' => $uid,
-                        'photo' => $url,
-                        'price' => $price,
-                        'new' => $new,
-                        'address' => $address,
-                        'cost' => $cost,
-                        'time' => $time
+                    ->where([
+                        'id' => $good_id
+                    ])
+                    ->update([
+                        $field => $url,
+                        'photo_number' => $photo_number
                     ]);
                 if (!$result){
                     if (is_file(COMMON.$url)){
@@ -152,32 +355,48 @@ class Index extends Collection
                     }
                     throw new UpdateException();
                 }
-            } else {
-                throw new BaseException([
-                    'msg' => '请检验上传图片格式（jpg,jpeg,png,bmp,gif）！'
-                ]);
             }
         }else{
-            $result = Db::table('good')
-                ->insert([
-                    'name' => $name,
-                    'type' => $type,
-                    'description' => $description,
-                    'publish_id' => $uid,
-                    'price' => $price,
-                    'new' => $new,
-                    'address' => $address,
-                    'cost' => $cost,
-                    'time' => $time
-                ]);
-            if (!$result){
-                throw new UpdateException();
-            }
+            throw new BaseException([
+                'msg' => '已有四张图片，不可再多上传'
+            ]);
         }
 
         return json_encode([
+            'code' =>200,
+            'msg' => '成功'
+        ]);
+    }
+
+    //发送手机验证码
+    public function phone_code(){
+        $uid = (new Token())->get_id();
+        $token = input('post.token');
+        $post = input('post.');
+        if (!$post){
+            exit(json_encode([
+                'code' => 400,
+                'msg' => '未传入任何参数！'
+            ]));
+        }
+        if (!array_key_exists('data',$post)){
+            exit(json_encode([
+                'code' => 403,
+                'msg' => '第二项参数缺失，禁止请求！'
+            ]));
+        }
+        $data = $post['data'];
+        if (!array_key_exists('phone',$data)){
+            exit(json_encode([
+                'code' => 400,
+                'msg' => '未传入手机号！'
+            ]));
+        }
+        $phone = $data['phone'];
+        sendcode($phone,$uid);
+        return json_encode([
             'code' => 200,
-            'msg' => '发布成功！'
+            'msg' => '发送成功'
         ]);
     }
 
@@ -204,7 +423,7 @@ class Index extends Collection
         $post = input('post.');
         if (!$post){
             exit(json_encode([
-                'code' => 403,
+                'code' => 400,
                 'msg' => '未传入任何参数！'
             ]));
         }
@@ -250,8 +469,14 @@ class Index extends Collection
             $r[$i]['user_grade'] = $d['grade'];
             $r[$i]['user_number'] = $d['number'];
             $r[$i]['user_phone'] = $d['phone'];
-            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['user_portrait'] = $d['portrait'];
+            $number = (int)$v['photo_number'];
+            for($j = 0; $j < $number; $j++){
+                $m = $j+1;
+                $r[$i]['photo'][$j] = config('setting.image_root').$v['photo'.$m];
+            }
             $r[$i]['price'] = $v['price'];
+            $r[$i]['photo_number'] = $v['photo_number'];
             $r[$i]['new'] = $v['new'];
             $r[$i]['address'] = $v['address'];
             $r[$i]['cost'] = $v['cost'];
@@ -307,7 +532,12 @@ class Index extends Collection
             $r[$i]['user_grade'] = $d['grade'];
             $r[$i]['user_number'] = $d['number'];
             $r[$i]['user_phone'] = $d['phone'];
-            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['user_portrait'] = $d['portrait'];
+            $number = (int)$v['photo_number'];
+            for($j = 0; $j < $number; $j++){
+                $m = $j+1;
+                $r[$i]['photo'][$j] = config('setting.image_root').$v['photo'.$m];
+            }
             $r[$i]['price'] = $v['price'];
             $r[$i]['new'] = $v['new'];
             $r[$i]['address'] = $v['address'];
@@ -338,7 +568,7 @@ class Index extends Collection
             ]));
         }
         $data = $post['data'];
-        if (!array_key_exists('good_id',$post)){
+        if (!array_key_exists('good_id',$data)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '未传入商品id'
@@ -377,7 +607,7 @@ class Index extends Collection
             ]));
         }
         $data = $post['data'];
-        if (!array_key_exists('search_word',$post)){
+        if (!array_key_exists('search_word',$data)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '未传入搜索关键词'
@@ -420,7 +650,12 @@ class Index extends Collection
             $r[$i]['user_grade'] = $d['grade'];
             $r[$i]['user_number'] = $d['number'];
             $r[$i]['user_phone'] = $d['phone'];
-            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['user_portrait'] = $d['portrait'];
+            $number = (int)$v['photo_number'];
+            for($j = 0; $j < $number; $j++){
+                $m = $j+1;
+                $r[$i]['photo'][$j] = config('setting.image_root').$v['photo'.$m];
+            }
             $r[$i]['price'] = $v['price'];
             $r[$i]['new'] = $v['new'];
             $r[$i]['address'] = $v['address'];
@@ -480,7 +715,12 @@ class Index extends Collection
             $r[$i]['user_grade'] = $d['grade'];
             $r[$i]['user_number'] = $d['number'];
             $r[$i]['user_phone'] = $d['phone'];
-            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['user_portrait'] = $d['portrait'];
+            $number = (int)$v['photo_number'];
+            for($j = 0; $j < $number; $j++){
+                $m = $j+1;
+                $r[$i]['photo'][$j] = config('setting.image_root').$v['photo'.$m];
+            }
             $r[$i]['price'] = $v['price'];
             $r[$i]['new'] = $v['new'];
             $r[$i]['address'] = $v['address'];
@@ -516,7 +756,7 @@ class Index extends Collection
             ]));
         }
         $data = $post['data'];
-        if (!array_key_exists('good_id',$post)){
+        if (!array_key_exists('good_id',$data)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '未传入宝贝id'
@@ -547,16 +787,60 @@ class Index extends Collection
                 'msg' => '删除失败'
             ]);
         }
-
-        $rr = Db::table('orders')
-            ->where('good_id')
-            ->delete();
-        if (!$rr){
-            Db::rollback();
-            throw new UpdateException([
-                'msg' => '删除失败'
-            ]);
+        $check = Db::table('orders')
+            ->where([
+                'good_id' => $good_id
+            ])->find();
+        if ($check){
+            $rr = Db::table('orders')
+                ->where([
+                    'good_id' => $good_id
+                ])
+                ->delete();
+            if (!$rr){
+                Db::rollback();
+                throw new UpdateException([
+                    'msg' => '删除失败'
+                ]);
+            }
         }
+
+        $check = Db::table('comment')
+            ->where([
+                'good_id' => $good_id
+            ])->find();
+        if ($check){
+            $r = Db::table('comment')
+                ->where([
+                    'good_id' => $good_id
+                ])->delete();
+
+            if (!$r){
+                Db::rollback();
+                throw new UpdateException([
+                    'msg' => '删除失败'
+                ]);
+            }
+        }
+
+        $check = Db::table('collect')
+            ->where([
+                'g_id' => $good_id
+            ])->find();
+        if ($check){
+            $r = Db::table('collect')
+                ->where([
+                    'g_id' => $good_id
+                ])->delete();
+
+            if (!$r){
+                Db::rollback();
+                throw new UpdateException([
+                    'msg' => '删除失败'
+                ]);
+            }
+        }
+
         Db::commit();
 
         return json_encode([
@@ -608,7 +892,12 @@ class Index extends Collection
             $r[$i]['user_grade'] = $d['grade'];
             $r[$i]['user_number'] = $d['number'];
             $r[$i]['user_phone'] = $d['phone'];
-            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['user_portrait'] = $d['portrait'];
+            $number = (int)$v['photo_number'];
+            for($j = 0; $j < $number; $j++){
+                $m = $j+1;
+                $r[$i]['photo'][$j] = config('setting.image_root').$v['photo'.$m];
+            }
             $r[$i]['price'] = $v['price'];
             $r[$i]['new'] = $v['new'];
             $r[$i]['address'] = $v['address'];
@@ -644,7 +933,7 @@ class Index extends Collection
             ]));
         }
         $data = $post['data'];
-        if (!array_key_exists('good_id',$post)){
+        if (!array_key_exists('good_id',$data)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '未传入宝贝id'
@@ -714,7 +1003,7 @@ class Index extends Collection
             ]));
         }
         $data = $post['data'];
-        if (!array_key_exists('good_id',$post)){
+        if (!array_key_exists('good_id',$data)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '未传入宝贝id'
@@ -730,7 +1019,7 @@ class Index extends Collection
         $b_id = $uid;
         $time = time();
 
-
+        Db::startTrans();
         $result = Db::table('orders')
             ->insert([
                 'good_id' => $good_id,
@@ -740,10 +1029,26 @@ class Index extends Collection
                 'time' => $time
             ]);
         if (!$result){
+            Db::rollback();
             throw new UpdateException([
                 'msg' => '生成订单失败'
             ]);
         }
+
+        $message = Db::table('message')
+            ->insert([
+                'text' => '您发布的'.$check['name'].'被购买啦！',
+                'time' => $time,
+                'u_id' => $s_id
+            ]);
+        if (!$message){
+            Db::rollback();
+            throw new UpdateException([
+                'msg' => '确认失败'
+            ]);
+        }
+
+        Db::commit();
 
         return json_encode([
             'code' => 200,
@@ -767,7 +1072,7 @@ class Index extends Collection
             ]));
         }
         $data = $post['data'];
-        if (!array_key_exists('good_id',$post)){
+        if (!array_key_exists('good_id',$data)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '未传入宝贝id'
@@ -821,7 +1126,7 @@ class Index extends Collection
             ]));
         }
         $data = $post['data'];
-        if (!array_key_exists('good_id',$post)){
+        if (!array_key_exists('good_id',$data)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '未传入宝贝id'
@@ -875,7 +1180,7 @@ class Index extends Collection
             ]));
         }
         $data = $post['data'];
-        if (!array_key_exists('good_id',$post)){
+        if (!array_key_exists('good_id',$data)){
             exit(json_encode([
                 'code' => 403,
                 'msg' => '未传入宝贝id'
@@ -904,6 +1209,7 @@ class Index extends Collection
             ->insert([
                 's_id' => $publish_id,
                 'b_id' => $uid,
+                'good_id' => $good_id,
                 'comment' => $comment
             ]);
         if (!$r){
@@ -981,7 +1287,12 @@ class Index extends Collection
             $r[$i]['user_grade'] = $d['grade'];
             $r[$i]['user_number'] = $d['number'];
             $r[$i]['user_phone'] = $d['phone'];
-            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['user_portrait'] = $d['portrait'];
+            $number = (int)$v['photo_number'];
+            for($j = 0; $j < $number; $j++){
+                $m = $j+1;
+                $r[$i]['photo'][$j] = config('setting.image_root').$v['photo'.$m];
+            }
             $r[$i]['price'] = $v['price'];
             $r[$i]['new'] = $v['new'];
             $r[$i]['address'] = $v['address'];
@@ -990,6 +1301,11 @@ class Index extends Collection
             $r[$i]['status'] = $k['status'];
             $i++;
         }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
     }
 
     //我买到的
@@ -1036,7 +1352,12 @@ class Index extends Collection
             $r[$i]['user_grade'] = $d['grade'];
             $r[$i]['user_number'] = $d['number'];
             $r[$i]['user_phone'] = $d['phone'];
-            $r[$i]['photo'] = config('setting.image_root').$v['phone'];
+            $r[$i]['user_portrait'] = $d['portrait'];
+            $number = (int)$v['photo_number'];
+            for($j = 0; $j < $number; $j++){
+                $m = $j+1;
+                $r[$i]['photo'][$j] = config('setting.image_root').$v['photo'.$m];
+            }
             $r[$i]['price'] = $v['price'];
             $r[$i]['new'] = $v['new'];
             $r[$i]['address'] = $v['address'];
@@ -1044,6 +1365,32 @@ class Index extends Collection
             $r[$i]['time'] = date('Y-m-d',$v['time']);
             $r[$i]['status'] = $k['status'];
             $i++;
+        }
+
+        return json_encode([
+            'code' => 200,
+            'msg' => $r
+        ]);
+    }
+
+    public function test(){
+        $file=Request::instance()->file('pic');
+         var_dump($file);
+        if($file){
+            if (is_array($file)){
+                foreach($file as $v){
+
+                    $info=$v->move('upload');
+
+                    $a=$info->getSaveName();
+                    var_dump($a);
+                }
+            }else{
+                $info=$file->move('upload');
+
+                $a=$info->getSaveName();
+                var_dump($a);
+            }
         }
     }
 }

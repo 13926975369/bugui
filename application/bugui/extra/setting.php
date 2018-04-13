@@ -7,15 +7,14 @@
  */
 
 return [
-//    'apiid'=> 'C34280921',
-    'apiid'=> 'C34293237',
-//    'apikey'=> '70cc8f1046ed20348b5fe5892d4b47bd',
-    'apikey'=> '478d2d6a66105f688835ce9dc2ec737b',
+    'apiid'=> 'C17913873',
+    'apikey'=> '726e10bbbed02de76699ac181ae038c7',
     'token_salt' => 'akgoiagpelk1d31345613',
     'token_expire_in' => 25920000,
     'cookie_time' => 10800,
     'image_root' => 'https://www.yiluzou.cn/bugui/public/',
     'user_salt' => 'Quanta',
-    'code_time' => 12
+    'code_time' => 150000,
+    'url' => 'http://106.ihuyi.com/webservice/sms.php?method=Submit&account=%s&password=%s&mobile=%s&content=您的验证码是：%s。请不要把验证码泄露给其他人。'
 ];
 
